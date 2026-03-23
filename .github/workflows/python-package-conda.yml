@@ -1,0 +1,61 @@
+name: Python Package using Conda
+
+# 触发方式：push代码时自动运行 + 允许手动点击运行
+on: 
+  push:
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 5
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    # 1. 配置Python环境（保留原模板的3.10版本）
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v3
+      with:
+        python-version: '3.10'
+    
+    # 2. 添加conda到系统路径（保留原模板逻辑）
+    - name: Add conda to system path
+      run: |
+        echo $CONDA/bin >> $GITHUB_PATH
+    
+    # 3. 安装tushare/akshare核心依赖（替换原有的environment.yml逻辑）
+    - name: Install data dependencies
+      run: |
+        # 用conda安装基础包，pip安装金融数据接口
+        conda install pandas -y
+        pip install tushare akshare
+    
+    # 4. 运行数据脚本（注入你配置的DATA_PROVIDER秘密）
+    - name: Run data fetch script
+      env:
+        # 关键：把你之前配置的秘密注入到环境变量
+        DATA_PROVIDER: ${{ secrets.DATA_PROVIDER }}
+      run: |
+        # 极简脚本：直接在配置里写死逻辑，不用单独创建main.py
+        python -c "
+import os
+import tushare as ts
+import akshare as ak
+
+# 读取你配置的数据源
+providers = os.environ.get('DATA_PROVIDER', '').split(',')
+
+# 调用tushare获取上证指数
+if 'tushare' in providers:
+    print('=== Tushare 上证指数 ===')
+    df = ts.get_index()
+    print(df.head())
+
+# 调用akshare获取上证指数
+if 'akshare' in providers:
+    print('=== Akshare 上证指数 ===')
+    df = ak.stock_zh_index_daily(symbol='sh000001')
+    print(df.tail())
+        "
